@@ -1,0 +1,166 @@
+String agAdi = "TurkTelekom_ZVKEW";                   //Aðýmýzýn adýný buraya yazýyoruz.    
+String agSifresi = "Yusuf0571";             //Aðýmýzýn þifresini buraya yazýyoruz.
+int motorPin1 = 3, motorPin2 = 4, motorPin3 = 5, motorPin4 = 6; //Step motor pinlerini tanýmlýyoruz.
+ 
+void setup()
+{ 
+  pinMode(motorPin1, OUTPUT);                                   //Motor pinleri OUTPUT olarak ayarlanýr.
+  pinMode(motorPin2, OUTPUT);
+  pinMode(motorPin3, OUTPUT);
+  pinMode(motorPin4, OUTPUT);
+  
+  Serial.begin(115200);                                         //Seri haberleþmeyi baþlatýyoruz.
+  Serial.println("AT");                                         //AT komutu ile modül kontrolünü yapýyoruz.
+  while(!Serial.find("OK"))
+  {                                    //Modül hazýr olana kadar bekliyoruz.
+    Serial.println("AT");
+  }
+  delay(1000);  
+  
+  Serial.println("AT+RST");                 //ESP8266'yý resetliyoruz.
+  delay(1000);
+  
+  while(!Serial.find("OK"))                 //Resetleme iþleminin bitmesini bekliyoruz.
+  delay(1000);
+  
+  Serial.println("AT+CWMODE=1");            //Modülümüzü client olarak ayarlýyoruz.
+  while(!Serial.find("OK"));                //Ayarlamanýn tamamlanmasýný bekliyoruz.
+  
+  Serial.println("AT+CWJAP=\""+agAdi+"\",\""+agSifresi+"\"");   //Wifi'a baðlanýyoruz. 
+  while(!Serial.find("OK"));                 //Baðlanana kadar bekliyoruz.
+  
+  Serial.print("AT+CIFSR\r\n");              //IP adresini ve MAC adresini okuyoruz.
+  Serial.print(espOkuma(1000));              //IP ve MAC adresini ekrana yazýyoruz.
+  serialTemizle(2000);                       //Seri haberleþmede kullanmadýðýmýz verileri temizliyoruz.
+ 
+  Serial.print("AT+CIPMUX=1\r\n");           //Çoklu baðlantý ayarýný yapýyoruz.
+  serialTemizle(2000);
+ 
+  Serial.print("AT+CIPSERVER=1,80\r\n");     //Server oluþturuyoruz ve 80. porttan dinlemeye baþlýyoruz.
+  serialTemizle(2000);
+}
+
+void loop()
+{
+  if(Serial.available()){               //Seri haberleþme verisi geldiðinde içindeki komutlar çalýþýr.
+    if(Serial.find("+IPD,"))
+    {                                   //Baðlantý isteði geldiðinde içindeki komutlar çalýþýr.
+      delay(200);
+      int connectionId = Serial.read() - 48;       //Baðlantý numarasýný okuyoruz.
+      String komut = espOkuma(1000);               //Baðlantý komutlarýný alýyoruz.    
+      if(komut.indexOf("step=ileri") != -1)
+      {                    //Ýleri komutu geldiðinde içerisindeki komutlar çalýþýr.
+        for(int adim = 0; adim < 50; adim++)
+        {                    //Step motora 5 kere ileri hareketi yaptýrýlýr.
+          stepIleri(20); 
+        }
+      }
+      else if(komut.indexOf("step=geri") != -1)
+      {                     //Geri komutu geldiðinde içerisindeki komutlar çalýþýr.
+        for(int adim = 0; adim < 50; adim++)
+        {                    //Step motora 5 kere geri hareketi yaptýrýlýr.
+          stepGeri(20); 
+        }
+      }
+    
+      String sayfa = "<h1>Step Motor Kontrol</h1><br>";                           
+      sayfa+="<br><a href=\"?step=ileri\"><button><h1>Ileri</h1></button></a>";
+      sayfa+="<br><br><a href=\"?step=geri\"><button><h1>Geri</h1></button></a>";
+      
+      komut = "AT+CIPSEND=";              //Sayfa verisinin uzunluðu komut deðiþkenine eþitlenir.
+      komut += connectionId;
+      komut += ",";
+      komut +=sayfa.length();
+      komut +="\r\n";
+      
+      Serial.print(komut);                //Komut gönderilir.
+      delay(1000);
+      Serial.print(sayfa);                //Sayfa verisi gönderilir.
+      delay(1000); 
+      komut = "AT+CIPCLOSE=";             //Baðlantý sonlandýrma komutu ayarlanýr.    
+      komut+=connectionId;
+      komut+="\r\n";
+      Serial.print(komut);                //Baðlantý sonlandýrma komutu gönderilir.
+    }
+  }
+}
+
+String espOkuma(long int zamanAsimi)
+{                           //ESP'den gelen dönütleri okur.
+  long int baslangic = millis();  
+  String gelen;
+  while(millis() - baslangic < zamanAsimi)
+  {                   
+    if(Serial.available()>0)
+    {
+        char c = Serial.read(); 
+        gelen += c;
+    } 
+  }
+  gelen.replace("AT+","");
+  return gelen;
+}
+
+void serialTemizle(long int zamanAsimi)
+{                         //Seri haberleþmede kullanmadýðýmýz bytelarý temizler.
+  long int baslangic = millis();
+  while(millis() - baslangic < zamanAsimi)
+  {
+    if(Serial.available()>0){
+        Serial.read(); 
+    } 
+  }
+}
+
+void stepIleri(int beklemeSuresi)
+{                               //Step motora ileri hareketi yaptýrýr.
+  digitalWrite(motorPin1, HIGH);
+  digitalWrite(motorPin2, LOW);
+  digitalWrite(motorPin3, LOW);
+  digitalWrite(motorPin4, LOW);
+  delay(beklemeSuresi);
+  
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, HIGH);
+  digitalWrite(motorPin3, LOW);
+  digitalWrite(motorPin4, LOW);
+  delay(beklemeSuresi);
+  
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, LOW);
+  digitalWrite(motorPin3, HIGH);
+  digitalWrite(motorPin4, LOW);
+  delay(beklemeSuresi);
+  
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, LOW);
+  digitalWrite(motorPin3, LOW);
+  digitalWrite(motorPin4, HIGH);
+  delay(beklemeSuresi);
+}
+void stepGeri(int beklemeSuresi)
+{                                //Step motora ileri hareketi yaptýrýr.
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, LOW);
+  digitalWrite(motorPin3, LOW);
+  digitalWrite(motorPin4, HIGH);
+  delay(beklemeSuresi);
+  
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, LOW);
+  digitalWrite(motorPin3, HIGH);
+  digitalWrite(motorPin4, LOW);
+  delay(beklemeSuresi);
+  
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, HIGH);
+  digitalWrite(motorPin3, LOW);
+  digitalWrite(motorPin4, LOW);
+  delay(beklemeSuresi);
+  
+  digitalWrite(motorPin1, HIGH);
+  digitalWrite(motorPin2, LOW);
+  digitalWrite(motorPin3, LOW);
+  digitalWrite(motorPin4, LOW);
+  delay(beklemeSuresi);
+}
